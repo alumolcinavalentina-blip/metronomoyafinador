@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Afinador</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%; height: 100%;
+      display: flex; align-items: center; justify-content: center;
+      overflow: hidden;
+    }
+
+    #app {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+      width: 100vw; height: 100vh;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      transition: background 0.5s;
+      background: #0d0d1a;
+      user-select: none;
+    }
+
+    /* ── Menú de color ── */
+    #menu-btn {
+      position: fixed; top: 1.2rem; right: 1.4rem;
+      background: none; border: none; cursor: pointer;
+      display: flex; flex-direction: column; gap: 4px;
+      padding: 6px; z-index: 100;
+      opacity: 0.5; transition: opacity 0.2s;
+    }
+    #menu-btn:hover { opacity: 1; }
+    #menu-btn span {
+      display: block; width: 5px; height: 5px;
+      border-radius: 50%; background: currentColor;
+    }
+
+    #color-panel {
+      position: fixed; top: 3.5rem; right: 1.2rem;
+      background: rgba(0,0,0,0.55); backdrop-filter: blur(12px);
+      border-radius: 14px; padding: 14px 16px;
+      display: none; flex-direction: column; gap: 10px;
+      z-index: 99; border: 1px solid rgba(255,255,255,0.08);
+      min-width: 160px;
+    }
+    #color-panel.open { display: flex; }
+
+    .panel-label {
+      font-size: 0.65rem; letter-spacing: 0.15em;
+      text-transform: uppercase; opacity: 0.4; color: #fff;
+    }
+
+    .color-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .swatch {
+      width: 22px; height: 22px; border-radius: 50%;
+      cursor: pointer; border: 2px solid transparent;
+      transition: transform 0.15s, border-color 0.15s;
+    }
+    .swatch:hover { transform: scale(1.2); border-color: rgba(255,255,255,0.4); }
+
+    #custom-color { display: flex; align-items: center; gap: 8px; }
+    #custom-color input[type=color] {
+      width: 28px; height: 28px; border: none; background: none;
+      cursor: pointer; border-radius: 50%; padding: 0;
+    }
+    #custom-color label { font-size: 0.72rem; color: rgba(255,255,255,0.5); }
+
+    #btn-random {
+      background: rgba(255,255,255,0.1); border: none; border-radius: 8px;
+      color: #fff; font-size: 0.72rem; padding: 6px 10px;
+      cursor: pointer; letter-spacing: 0.05em;
+      transition: background 0.15s;
+    }
+    #btn-random:hover { background: rgba(255,255,255,0.2); }
+
+    /* ── Nota detectada ── */
+    #note-display {
+      font-size: clamp(5rem, 22vw, 12rem);
+      font-weight: 700;
+      letter-spacing: -0.05em;
+      line-height: 1;
+      transition: color 0.2s;
+    }
+
+    #note-octave {
+      font-size: clamp(1.2rem, 4vw, 2.5rem);
+      font-weight: 300;
+      opacity: 0.5;
+      vertical-align: super;
+      margin-left: 0.1em;
+    }
+
+    #freq-display {
+      font-size: clamp(0.8rem, 2.5vw, 1.4rem);
+      font-weight: 400;
+      letter-spacing: 0.25em;
+      opacity: 0.35;
+      margin-top: 0.4rem;
+    }
+
+    /* ── Medidor de cents ── */
+    #meter-wrap {
+      position: relative;
+      width: clamp(240px, 65vw, 500px);
+      margin: clamp(1.5rem, 4vh, 3rem) 0;
+    }
+
+    #meter-track {
+      width: 100%; height: 6px;
+      border-radius: 3px;
+      background: rgba(255,255,255,0.12);
+      position: relative;
+      overflow: visible;
+    }
+
+    #meter-center {
+      position: absolute; top: -4px; left: 50%;
+      width: 2px; height: 14px;
+      background: rgba(255,255,255,0.4);
+      transform: translateX(-50%);
+      border-radius: 1px;
+    }
+
+    #meter-needle {
+      position: absolute; top: -8px; left: 50%;
+      width: 4px; height: 22px;
+      border-radius: 2px;
+      background: currentColor;
+      transform: translateX(-50%);
+      transition: left 0.12s ease, background 0.3s;
+    }
+
+    #meter-labels {
+      display: flex; justify-content: space-between;
+      margin-top: 10px;
+      font-size: 0.65rem;
+      opacity: 0.3;
+      letter-spacing: 0.05em;
+    }
+
+    #tuning-status {
+      font-size: clamp(0.75rem, 2vw, 1rem);
+      font-weight: 500;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      opacity: 0.6;
+      margin-top: 0.5rem;
+      transition: opacity 0.2s;
+    }
+
+    /* ── Cents numérico ── */
+    #cents-display {
+      font-size: clamp(1.2rem, 4vw, 2rem);
+      font-weight: 300;
+      letter-spacing: 0.05em;
+      opacity: 0.7;
+      min-height: 2.2rem;
+    }
+
+    /* ── Botón mic ── */
+    #mic-btn {
+      margin-top: clamp(1.5rem, 3vh, 2.5rem);
+      width: clamp(60px, 14vw, 90px);
+      height: clamp(60px, 14vw, 90px);
+      border-radius: 50%;
+      background: rgba(255,255,255,0.12);
+      border: 2px solid rgba(255,255,255,0.2);
+      cursor: pointer; color: inherit;
+      display: flex; align-items: center; justify-content: center;
+      font-size: clamp(1.5rem, 4vw, 2.2rem);
+      transition: background 0.2s, transform 0.12s, border-color 0.2s;
+    }
+    #mic-btn:hover { background: rgba(255,255,255,0.22); }
+    #mic-btn:active { transform: scale(0.93); }
+    #mic-btn.active {
+      background: rgba(255,255,255,0.22);
+      border-color: rgba(255,255,255,0.5);
+      animation: pulse 1.8s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%,100% { box-shadow: 0 0 0 0 rgba(255,255,255,0.15); }
+      50%      { box-shadow: 0 0 0 12px rgba(255,255,255,0); }
+    }
+
+    #mic-label {
+      margin-top: 0.7rem;
+      font-size: 0.7rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      opacity: 0.3;
+    }
+
+    /* ── Notas referencia ── */
+    #ref-notes {
+      display: flex; gap: clamp(6px, 1.5vw, 12px);
+      margin-top: clamp(1.2rem, 3vh, 2rem);
+      flex-wrap: wrap; justify-content: center;
+    }
+    .ref-btn {
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      padding: 5px 10px;
+      font-size: 0.78rem; letter-spacing: 0.05em;
+      cursor: pointer; color: inherit;
+      transition: background 0.15s;
+    }
+    .ref-btn:hover { background: rgba(255,255,255,0.16); }
+
+    /* ── Selector de modo ── */
+    #mode-selector {
+      display: flex; gap: 6px; flex-wrap: wrap; justify-content: center;
+      margin-bottom: clamp(0.8rem, 2vh, 1.4rem);
+    }
+    .mode-btn {
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 8px; padding: 5px 12px;
+      font-size: 0.75rem; letter-spacing: 0.1em;
+      cursor: pointer; color: inherit; opacity: 0.5;
+      transition: opacity 0.15s, background 0.15s;
+    }
+    .mode-btn.active { opacity: 1; background: rgba(255,255,255,0.18); }
+    .mode-btn:hover { opacity: 0.85; }
+
+    /* Estado sin señal */
+    .no-signal { opacity: 0.15; }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Menú color -->
+  <button id="menu-btn" aria-label="Opciones de color">
+    <span></span><span></span><span></span>
+  </button>
+  <div id="color-panel">
+    <span class="panel-label">Color de fondo</span>
+    <div class="color-row" id="swatches"></div>
+    <div id="custom-color">
+      <input type="color" id="picker" value="#1a0a2e" title="Color personalizado">
+      <label for="picker">Personalizado</label>
+    </div>
+    <button id="btn-random">↻ Aleatorio</button>
+  </div>
+
+  <!-- Nota -->
+  <div id="note-display" class="no-signal">–<span id="note-octave"></span></div>
+  <div id="freq-display" class="no-signal">– Hz</div>
+
+  <!-- Cents -->
+  <div id="cents-display" class="no-signal">0¢</div>
+
+  <!-- Medidor -->
+  <div id="meter-wrap">
+    <div id="meter-track">
+      <div id="meter-center"></div>
+      <div id="meter-needle" class="no-signal"></div>
+    </div>
+    <div id="meter-labels">
+      <span>−50¢</span><span>−25¢</span><span>0</span><span>+25¢</span><span>+50¢</span>
+    </div>
+  </div>
+
+  <div id="tuning-status" class="no-signal">Esperando señal</div>
+
+  <!-- Botón micrófono -->
+  <button id="mic-btn" aria-label="Activar micrófono">🎤</button>
+  <div id="mic-label">Toca para afinar</div>
+
+  <!-- Selector de modo -->
+  <div id="mode-selector">
+    <button class="mode-btn active" data-mode="C">C Cromático</button>
+    <button class="mode-btn" data-mode="G">G Guitarra</button>
+    <button class="mode-btn" data-mode="B">B Bajo</button>
+    <button class="mode-btn" data-mode="U">U Ukelele</button>
+    <button class="mode-btn" data-mode="V">V Violín/Cello</button>
+  </div>
+
+  <!-- Notas de referencia (tono de referencia) -->
+  <div id="ref-notes">
+    <button class="ref-btn" data-note="E2">E2</button>
+    <button class="ref-btn" data-note="A2">A2</button>
+    <button class="ref-btn" data-note="D3">D3</button>
+    <button class="ref-btn" data-note="G3">G3</button>
+    <button class="ref-btn" data-note="B3">B3</button>
+    <button class="ref-btn" data-note="E4">E4</button>
+  </div>
+
+</div>
+
+<script>
+  /* ── Color utils ── */
+  function hexRgb(h) {
+    return { r: parseInt(h.slice(1,3),16), g: parseInt(h.slice(3,5),16), b: parseInt(h.slice(5,7),16) };
+  }
+  function lumOf(h) {
+    const {r,g,b} = hexRgb(h); return 0.299*r + 0.587*g + 0.114*b;
+  }
+  function shiftColor(h, a, lighter) {
+    let {r,g,b} = hexRgb(h);
+    if (lighter) {
+      r = Math.min(255, Math.round(r+(255-r)*a));
+      g = Math.min(255, Math.round(g+(255-g)*a));
+      b = Math.min(255, Math.round(b+(255-b)*a));
+    } else {
+      r = Math.max(0, Math.round(r*(1-a)));
+      g = Math.max(0, Math.round(g*(1-a)));
+      b = Math.max(0, Math.round(b*(1-a)));
+    }
+    return '#' + [r,g,b].map(x => x.toString(16).padStart(2,'0')).join('');
+  }
+
+  function getRandomColor() {
+    const hue = Math.floor(Math.random() * 360);
+    const s = (Math.floor(Math.random() * 30) + 40) / 100;
+    const l = (Math.floor(Math.random() * 20) + 10) / 100;
+    const h = hue / 360;
+    let r, g, b;
+    if (s === 0) { r = g = b = l; } else {
+      const hue2rgb = (p, q, t) => {
+        if (t < 0) t += 1; if (t > 1) t -= 1;
+        if (t < 1/6) return p + (q-p)*6*t;
+        if (t < 1/2) return q;
+        if (t < 2/3) return p + (q-p)*(2/3-t)*6;
+        return p;
+      };
+      const q = l < 0.5 ? l*(1+s) : l+s-l*s;
+      const p = 2*l - q;
+      r = hue2rgb(p, q, h+1/3);
+      g = hue2rgb(p, q, h);
+      b = hue2rgb(p, q, h-1/3);
+    }
+    const toHex = x => { const hx = Math.round(x*255).toString(16); return hx.length===1?'0'+hx:hx; };
+    return '#' + toHex(r) + toHex(g) + toHex(b);
+  }
+
+  let textColor = '#ffffff';
+
+  function applyColor(hex) {
+    const dark = lumOf(hex) < 140;
+    textColor = shiftColor(hex, 0.5, dark);
+    const app = document.getElementById('app');
+    app.style.background = hex;
+    app.style.color = textColor;
+    document.getElementById('menu-btn').style.color = textColor;
+    document.getElementById('picker').value = hex;
+  }
+
+  /* ── Swatches ── */
+  const presets = ['#1a0a2e','#0d1f0d','#1f0d0d','#0a1a2e','#1a1a00','#0d0d0d','#1a0a0a','#001a1a'];
+  const swatchContainer = document.getElementById('swatches');
+  presets.forEach(c => {
+    const s = document.createElement('button');
+    s.className = 'swatch';
+    s.style.background = c;
+    s.onclick = () => { applyColor(c); closePanel(); };
+    swatchContainer.appendChild(s);
+  });
+
+  const panel = document.getElementById('color-panel');
+  document.getElementById('menu-btn').onclick = (e) => {
+    e.stopPropagation(); panel.classList.toggle('open');
+  };
+  document.addEventListener('click', () => panel.classList.remove('open'));
+  panel.addEventListener('click', e => e.stopPropagation());
+  function closePanel() { panel.classList.remove('open'); }
+  document.getElementById('picker').addEventListener('input', e => applyColor(e.target.value));
+  document.getElementById('btn-random').onclick = () => applyColor(getRandomColor());
+
+  /* ── Notas ── */
+  const NOTE_NAMES = ['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
+  const A4 = 440;
+
+  function freqToNote(freq) {
+    const semitones = 12 * Math.log2(freq / A4);
+    const nearest = Math.round(semitones);
+    const cents = (semitones - nearest) * 100;
+    const midiNote = nearest + 69;
+    const octave = Math.floor(midiNote / 12) - 1;
+    const name = NOTE_NAMES[((midiNote % 12) + 12) % 12];
+    return { name, octave, cents, freq };
+  }
+
+  /* ── Pitch detection (autocorrelación) ── */
+  function autoCorrelate(buf, sampleRate) {
+    const SIZE = buf.length;
+    let rms = 0;
+    for (let i = 0; i < SIZE; i++) rms += buf[i] * buf[i];
+    rms = Math.sqrt(rms / SIZE);
+    if (rms < 0.01) return -1;
+
+    let r1 = 0, r2 = SIZE - 1;
+    const thres = 0.2;
+    for (let i = 0; i < SIZE / 2; i++) {
+      if (Math.abs(buf[i]) < thres) { r1 = i; break; }
+    }
+    for (let i = 1; i < SIZE / 2; i++) {
+      if (Math.abs(buf[SIZE - i]) < thres) { r2 = SIZE - i; break; }
+    }
+
+    const buf2 = buf.slice(r1, r2);
+    const c = new Array(buf2.length).fill(0);
+    for (let i = 0; i < buf2.length; i++) {
+      for (let j = 0; j < buf2.length - i; j++) {
+        c[i] += buf2[j] * buf2[j + i];
+      }
+    }
+
+    let d = 0;
+    while (c[d] > c[d + 1]) d++;
+    let maxval = -1, maxpos = -1;
+    for (let i = d; i < buf2.length; i++) {
+      if (c[i] > maxval) { maxval = c[i]; maxpos = i; }
+    }
+
+    let T0 = maxpos;
+    const x1 = c[T0 - 1], x2 = c[T0], x3 = c[T0 + 1];
+    const a2 = (x1 + x3 - 2 * x2) / 2;
+    const b2 = (x3 - x1) / 2;
+    if (a2) T0 = T0 - b2 / (2 * a2);
+
+    return sampleRate / T0;
+  }
+
+  /* ── Estado del afinador ── */
+  let audioCtx = null;
+  let analyser = null;
+  let stream = null;
+  let rafId = null;
+  let listening = false;
+
+  const noteEl = document.getElementById('note-display');
+  const octaveEl = document.getElementById('note-octave');
+  const freqEl = document.getElementById('freq-display');
+  const centsEl = document.getElementById('cents-display');
+  const needle = document.getElementById('meter-needle');
+  const statusEl = document.getElementById('tuning-status');
+  const micBtn = document.getElementById('mic-btn');
+
+  function setNoSignal() {
+    document.querySelectorAll('.no-signal-target').forEach(e => e.classList.add('no-signal'));
+    noteEl.textContent = '–';
+    octaveEl.textContent = '';
+    freqEl.textContent = '– Hz';
+    centsEl.textContent = '0¢';
+    needle.style.left = '50%';
+    statusEl.textContent = 'Escuchando...';
+    [noteEl, freqEl, centsEl, needle, statusEl].forEach(e => e.classList.add('no-signal'));
+  }
+
+  function updateUI({ name, octave, cents, freq }) {
+    [noteEl, freqEl, centsEl, needle, statusEl].forEach(e => e.classList.remove('no-signal'));
+
+    // Nota sin el octave (el octave va en el span)
+    noteEl.childNodes[0].nodeValue = name;
+    octaveEl.textContent = octave;
+
+    freqEl.textContent = freq.toFixed(1) + ' Hz';
+
+    const sign = cents >= 0 ? '+' : '';
+    centsEl.textContent = sign + Math.round(cents) + '¢';
+
+    // Posición de la aguja: 50% = centro, rango ±50 cents → ancho total
+    const pct = 50 + (cents / 50) * 50;
+    needle.style.left = Math.max(0, Math.min(100, pct)) + '%';
+
+    // Color de la aguja según afinación
+    const absCents = Math.abs(cents);
+    if (absCents < 5) {
+      needle.style.background = '#4ade80'; // verde
+      statusEl.textContent = '✓ Afinado';
+    } else if (absCents < 15) {
+      needle.style.background = '#facc15'; // amarillo
+      statusEl.textContent = cents > 0 ? '▼ Demasiado alto' : '▲ Demasiado bajo';
+    } else {
+      needle.style.background = '#f87171'; // rojo
+      statusEl.textContent = cents > 0 ? '▼▼ Muy alto' : '▲▲ Muy bajo';
+    }
+  }
+
+  let silenceFrames = 0;
+
+  function analyzeLoop() {
+    if (!analyser) return;
+    const buf = new Float32Array(analyser.fftSize);
+    analyser.getFloatTimeDomainData(buf);
+    const freq = autoCorrelate(buf, audioCtx.sampleRate);
+
+    if (freq > 50 && freq < 2000) {
+      silenceFrames = 0;
+      const info = freqToNote(freq);
+      updateUI(info);
+    } else {
+      silenceFrames++;
+      if (silenceFrames > 20) setNoSignal();
+    }
+    rafId = requestAnimationFrame(analyzeLoop);
+  }
+
+  async function startListening() {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 2048;
+      const source = audioCtx.createMediaStreamSource(stream);
+      source.connect(analyser);
+      listening = true;
+      micBtn.classList.add('active');
+      micBtn.textContent = '🔴';
+      document.getElementById('mic-label').textContent = 'Escuchando';
+      setNoSignal();
+      analyzeLoop();
+    } catch (err) {
+      statusEl.textContent = 'Sin acceso al micrófono';
+      statusEl.classList.remove('no-signal');
+    }
+  }
+
+  function stopListening() {
+    listening = false;
+    if (rafId) cancelAnimationFrame(rafId);
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    if (audioCtx) { audioCtx.close(); audioCtx = null; }
+    analyser = null; stream = null;
+    micBtn.classList.remove('active');
+    micBtn.textContent = '🎤';
+    document.getElementById('mic-label').textContent = 'Toca para afinar';
+    [noteEl, freqEl, centsEl, needle, statusEl].forEach(e => e.classList.add('no-signal'));
+    noteEl.childNodes[0].nodeValue = '–';
+    octaveEl.textContent = '';
+    freqEl.textContent = '– Hz';
+    centsEl.textContent = '0¢';
+    needle.style.left = '50%';
+    needle.style.background = 'currentColor';
+    statusEl.textContent = 'Esperando señal';
+  }
+
+  micBtn.onclick = () => {
+    if (listening) stopListening(); else startListening();
+  };
+
+  /* ── Modos de instrumento ── */
+  const MODES = {
+    C: { label: 'Cromático', notes: null }, // null = sin botones de referencia fijos
+    G: { label: 'Guitarra', notes: { 'E2': 82.41, 'A2': 110.00, 'D3': 146.83, 'G3': 196.00, 'B3': 246.94, 'E4': 329.63 } },
+    B: { label: 'Bajo',     notes: { 'B0': 30.87, 'E1': 41.20, 'A1': 55.00, 'D2': 73.42, 'G2': 98.00 } },
+    U: { label: 'Ukelele',  notes: { 'G4': 392.00, 'C4': 261.63, 'E4': 329.63, 'A4': 440.00 } },
+    V: { label: 'Violín/Cello', notes: { 'C2': 65.41, 'G2': 98.00, 'D3': 146.83, 'A3': 220.00, 'E4': 329.63, 'G3': 196.00 } },
+  };
+
+  let currentMode = 'G'; // arrancamos en guitarra para que los botones de ref tengan sentido
+
+  function buildRefNotes(mode) {
+    const container = document.getElementById('ref-notes');
+    container.innerHTML = '';
+    const notes = MODES[mode].notes;
+    if (!notes) {
+      container.innerHTML = '<span style="font-size:0.72rem;opacity:0.35;letter-spacing:0.1em;">Detecta cualquier nota</span>';
+      return;
+    }
+    Object.entries(notes).forEach(([name, freq]) => {
+      const btn = document.createElement('button');
+      btn.className = 'ref-btn';
+      btn.dataset.note = name;
+      btn.textContent = name;
+      btn.onclick = () => playRefNote(freq);
+      container.appendChild(btn);
+    });
+  }
+
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentMode = btn.dataset.mode;
+      buildRefNotes(currentMode);
+    };
+  });
+
+  /* ── Notas de referencia (tono audible) ── */
+  // Las frecuencias completas para cualquier nota que se construya dinámicamente
+  const noteFreqs = {
+    'B0': 30.87, 'E1': 41.20, 'A1': 55.00, 'D2': 73.42, 'G2': 98.00,
+    'C2': 65.41, 'E2': 82.41, 'A2': 110.00, 'D3': 146.83,
+    'G3': 196.00, 'B3': 246.94, 'E4': 329.63,
+    'C4': 261.63, 'G4': 392.00, 'A3': 220.00, 'A4': 440.00,
+  };
+
+  let refOsc = null;
+  let refGain = null;
+  let refCtx = null;
+
+  function playRefNote(freq) {
+    if (!refCtx) refCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (refOsc) { refOsc.stop(); refOsc = null; }
+    refOsc = refCtx.createOscillator();
+    refGain = refCtx.createGain();
+    refOsc.type = 'sine';
+    refOsc.frequency.value = freq;
+    refGain.gain.setValueAtTime(0, refCtx.currentTime);
+    refGain.gain.linearRampToValueAtTime(0.3, refCtx.currentTime + 0.05);
+    refGain.gain.linearRampToValueAtTime(0, refCtx.currentTime + 2.5);
+    refOsc.connect(refGain);
+    refGain.connect(refCtx.destination);
+    refOsc.start();
+    refOsc.stop(refCtx.currentTime + 2.6);
+  }
+
+  // Eliminar los listeners antiguos de .ref-btn (ya no existen en el DOM al cargar)
+  // buildRefNotes se encarga de todo
+
+  /* ── Init ── */
+  // Preparar el nodo de texto del note display para poder actualizar sólo el texto
+  noteEl.innerHTML = '–<span id="note-octave"></span>';
+  const octaveElNew = document.getElementById('note-octave');
+
+  // Arrancar en modo Guitarra con sus botones de referencia
+  currentMode = 'G';
+  document.querySelectorAll('.mode-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === 'G');
+  });
+  buildRefNotes('G');
+
+  applyColor(getRandomColor());
+</script>
+</body>
+</html>
